@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оқушылар зейіні мен эмоциясын талдау жүйесі</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for real-time graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- TensorFlow.js & BlazeFace Models -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+
+    <!-- Жеке CSS файлын қосу -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header Navigation -->
+    <header class="glass-card sticky top-0 z-50 px-6 py-3.5 flex justify-between items-center border-b border-slate-200">
+        <div class="flex items-center space-x-3.5">
+            <div class="bg-gradient-to-tr from-indigo-600 to-violet-600 text-white p-2.5 rounded-2xl shadow-md shadow-indigo-500/20">
+                <i class="fa-solid fa-brain text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold bg-gradient-to-r from-indigo-700 via-indigo-900 to-slate-800 bg-clip-text text-transparent">EduVision AI Studio</h1>
+                <p class="text-xs text-slate-500 font-medium">Оқушылардың сабақтағы эмоциясы мен зейін мониторингі</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span id="systemStatus" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <span class="w-2 h-2 rounded-full bg-amber-500 mr-2 animate-ping"></span> Модель Жүктелуде...
+            </span>
+            <button id="exportCsvBtn" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shadow-sm">
+                <i class="fa-solid fa-file-excel text-emerald-600"></i> Excel есеп
+            </button>
+            <button id="aiReportBtn" class="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:opacity-95 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 shadow-md shadow-indigo-500/20 flex items-center space-x-2 disabled:opacity-40" disabled>
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                <span>AI Педагогикалық Сараптама</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="container mx-auto px-4 py-6 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: Video Feed & Controls -->
+        <div class="lg:col-span-7 flex flex-col space-y-5">
+            <div class="glass-card rounded-3xl p-4 border border-slate-200 relative">
+                <div class="flex justify-between items-center mb-3 px-2">
+                    <span class="text-xs font-bold tracking-wide uppercase text-indigo-700 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span> Бейнебақылау терезесі
+                    </span>
+                    <div id="detectedCount" class="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3.5 py-1.5 rounded-xl text-indigo-900 shadow-sm">
+                        <i class="fa-solid fa-users text-indigo-600 text-xs"></i>
+                        <span class="text-xs font-bold">Камерадағы оқушылар:</span>
+                        <span class="text-sm font-black text-indigo-700 bg-white px-2 py-0.5 rounded-lg border border-indigo-100 shadow-inner" id="faceCountNum">0</span>
+                    </div>
+                </div>
+
+                <!-- Video / Canvas Screen -->
+                <div class="canvas-container bg-slate-900 rounded-2xl overflow-hidden aspect-video flex items-center justify-center border border-slate-300 relative shadow-inner">
+                    <video id="webcam" class="w-full h-full object-cover hidden" playsinline muted></video>
+                    <img id="imagePreview" class="w-full h-full object-contain hidden" alt="Uploaded source">
+                    <canvas id="overlayCanvas" class="overlay"></canvas>
+                    
+                    <div id="placeholder" class="text-center p-8">
+                        <div class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-700">
+                            <i class="fa-solid fa-video text-2xl text-indigo-400"></i>
+                        </div>
+                        <p class="text-slate-200 font-semibold text-sm">Камераны қосыңыз немесе сынып фотосын жүктеңіз</p>
+                        <p class="text-slate-400 text-xs mt-1">Жүйе оқушылардың түрін автоматты түрде таниды</p>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="grid grid-cols-3 gap-3 mt-4">
+                    <button id="startCamBtn" class="btn-gradient text-white font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md">
+                        <i class="fa-solid fa-play text-sm"></i> Камераны қосу
+                    </button>
+                    <button id="stopCamBtn" class="bg-white hover:bg-rose-50 text-rose-700 border border-slate-300 font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 disabled:opacity-40 shadow-sm" disabled>
+                        <i class="fa-solid fa-stop text-rose-600"></i> Тоқтату
+                    </button>
+                    <label class="bg-white hover:bg-slate-50 text-slate-700 font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer border border-slate-300 shadow-sm">
+                        <i class="fa-solid fa-arrow-up-from-bracket text-indigo-600"></i> Сурет жүктеу
+                        <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Current Emotions Metrics -->
+            <div class="glass-card rounded-3xl p-5">
+                <h3 class="text-xs font-bold text-slate-600 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-indigo-600"></i> Эмоциялар & Зейін көрсеткіші
+                </h3>
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center glass-card-hover">
+                        <span class="text-2xl">😐</span>
+                        <div class="text-[11px] font-semibold text-slate-600 mt-1.5">Зейінді</div>
+                        <div id="valNeutral" class="text-base font-bold text-slate-800 mt-0.5">0%</div>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center glass-card-hover">
+                        <span class="text-2xl">😊</span>
+                        <div class="text-[11px] font-semibold text-slate-600 mt-1.5">Қызығушылық</div>
+                        <div id="valHappy" class="text-base font-bold text-emerald-600 mt-0.5">0%</div>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center glass-card-hover">
+                        <span class="text-2xl">😲</span>
+                        <div class="text-[11px] font-semibold text-slate-600 mt-1.5">Таңғалған</div>
+                        <div id="valSurprised" class="text-base font-bold text-sky-600 mt-0.5">0%</div>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center glass-card-hover">
+                        <span class="text-2xl">👀</span>
+                        <div class="text-[11px] font-semibold text-slate-600 mt-1.5">Жанына қарады</div>
+                        <div id="valSide" class="text-base font-bold text-amber-600 mt-0.5">0%</div>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center glass-card-hover">
+                        <span class="text-2xl">😴</span>
+                        <div class="text-[11px] font-semibold text-slate-600 mt-1.5">Төмен қарады</div>
+                        <div id="valDistracted" class="text-base font-bold text-rose-600 mt-0.5">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Dashboard -->
+        <div class="lg:col-span-5 flex flex-col space-y-5">
+            <div class="glass-card rounded-3xl p-6 relative overflow-hidden bg-white">
+                <div class="absolute -right-8 -bottom-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-[11px] font-bold uppercase tracking-widest text-slate-500">Сыныптың Зейін Индексі</span>
+                        <h2 id="overallScore" class="text-4xl font-black text-indigo-600 mt-1">0%</h2>
+                    </div>
+                    <div class="flex flex-col items-end gap-1.5">
+                        <div id="scoreBadge" class="px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            Дерек күтілуде
+                        </div>
+                        <span id="timerDisplay" class="text-xs text-slate-500 font-mono font-medium"><i class="fa-regular fa-clock mr-1 text-slate-400"></i>00:00</span>
+                    </div>
+                </div>
+                <div class="w-full bg-slate-100 h-3 rounded-full mt-5 overflow-hidden p-0.5 border border-slate-200">
+                    <div id="scoreBar" class="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 h-full w-0% rounded-full transition-all duration-500"></div>
+                </div>
+            </div>
+
+            <!-- Real-time Chart -->
+            <div class="glass-card rounded-3xl p-5 flex-grow flex flex-col justify-between bg-white">
+                <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center justify-between">
+                    <span><i class="fa-solid fa-chart-line text-emerald-600 mr-2"></i>Зейін Динамикасы</span>
+                    <span class="text-[10px] font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">Live</span>
+                </h3>
+                <div class="relative w-full h-48 sm:h-56">
+                    <canvas id="attentionChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Hints -->
+            <div class="glass-card rounded-3xl p-4 border border-slate-200 bg-white">
+                <h4 class="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-2">
+                    <i class="fa-solid fa-lightbulb text-amber-500"></i> Педагогикалық Нұсқаулық:
+                </h4>
+                <p id="quickHint" class="text-xs text-slate-600 leading-relaxed font-normal">
+                    Камера немесе сурет қосылғаннан кейін, барлық оқушылардың саны мен олардың зейіні нақты есептелінеді.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- AI Modal -->
+    <div id="aiModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="glass-card bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-200">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl border border-indigo-100">
+                        <i class="fa-solid fa-robot text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">Gemini AI Педагогикалық Сараптама</h3>
+                        <p class="text-xs text-slate-500">Сабақ атмосферасы мен оқушылардың назарын талдау</p>
+                    </div>
+                </div>
+                <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600 text-xl p-1 font-bold">×</button>
+            </div>
+            <div id="aiModalContent" class="py-5 overflow-y-auto flex-grow text-sm text-slate-700 leading-relaxed"></div>
+            <div class="pt-4 border-t border-slate-200 flex justify-end">
+                <button id="modalOkBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2 rounded-xl text-xs transition shadow-md shadow-indigo-600/20">
+                    Түсінікті
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Жеке JS файлын қосу -->
+    <script src="script.js"></script>
+</body>
+</html>
